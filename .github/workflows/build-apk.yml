@@ -1,0 +1,72 @@
+
+name: FF ROOT GUARD APK Builder
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'FF_ROOT_GUARD_Android_Source.zip'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Extract source
+        run: |
+          unzip FF_ROOT_GUARD_Android_Source.zip
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Configure Java 17
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("FF_ROOT_GUARD_Android/app/build.gradle")
+          s = p.read_text()
+          s = s.replace(
+              "android {",
+              """android {
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }""",
+              1
+          )
+          p.write_text(s)
+          PY
+
+      - name: Build APK
+        working-directory: FF_ROOT_GUARD_Android
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FF-ROOT-GUARD-APK
+          path: FF_ROOT_GUARD_Android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          
